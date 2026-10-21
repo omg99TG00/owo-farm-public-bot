@@ -51,517 +51,504 @@ def _materialize_embedded_files():
     for rel_path, blob in _EMBEDDED_BIN.items():
         _write_if_changed(rel_path, _zlib.decompress(_b64.b64decode(blob)))
 
-_EMBEDDED_TEXT = {}
-_EMBEDDED_BIN = {}
+_EMBEDDED_TEXT = {
+    'core/__init__.py': r'''# https://discord.gg/asMJGgDA7u
 
-# ---------------------------------------------------------------------------
-# LOGGING & UI
-# ---------------------------------------------------------------------------
+"""
+This code is only made for educational and practice purposes. 
+Author and Async Development are not responsible for misuse.
 
-def clear_screen():
-    brutality_ghosty.system('cls' if brutality_ghosty.name == 'nt' else 'clear')
+GhoSty OwO V4 Alpha Build
+Stable Alpha Build Version: 280826.4.1.0
 
-def log_info(msg):
-    print(f"[INFO] {msg}")
+GitHub: https://github.com/WannaBeGhoSt
+Discord: https://discord.gg/asMJGgDA7u
+"""''',
+    'core/bossmodule.py': r'''"""
+This code is only made for educational and practice purposes. 
+Author and Async Development are not responsible for misuse.
 
-def log_warn(msg):
-    print(f"[WARN] {msg}")
+GhoSty OwO V4 Alpha Build
+Stable Alpha Build Version: 280826.4.1.0
 
-def log_error(msg):
-    print(f"[ERROR] {msg}")
+GitHub: https://github.com/WannaBeGhoSt
+Discord: https://discord.gg/asMJGgDA7u
+"""
 
-def log_success(msg):
-    print(f"[✓] {msg}")
+import asyncio as made_by_ghosty
+import random as ghostyjija
+from datetime import datetime, timedelta
+import math
 
-def log_worker_start(number):
-    print(f"[WORKER #{number:02d}] Starting...")
+from .ui import log_worker_event
 
-def log_worker_ready(number, username, auto_start_ch):
-    ch_str = f"(channel: {auto_start_ch})" if auto_start_ch else "(waiting for channel)"
-    print(f"[WORKER #{number:02d}] Ready: {username} {ch_str}")
+def calculate_boss_delay():
+    min_delay = 17 * 60  
+    max_delay = 31 * 60 
 
-def log_controller_ready(username):
-    print(f"[CONTROLLER] Ready: {username} | Command: .panel")
+    u = max(0.0001, ghostyjija.random())
+    v = ghostyjija.random() 
+    z = math.sqrt(-2.0 * math.log(u)) * math.cos(2.0 * math.pi * v)
+    
+    skewed_val = (z * 0.2) + 0.4 
 
-def log_disconnect(label):
-    print(f"{label} DISCONNECTED")
+    t = max(0.0, min(1.0, skewed_val))
 
-def log_resumed(label):
-    print(f"{label} RESUMED")
+    p0, p1, p2, p3 = 0.0, 0.2, 0.8, 1.0
+    bezier_t = (1-t)**3 * p0 + 3*((1-t)**2)*t * p1 + 3*(1-t)*(t**2) * p2 + t**3 * p3
 
-def log_event_error(label, event):
-    print(f"{label} EVENT ERROR: {event}")
+    delay_range = max_delay - min_delay
+    final_delay_seconds = min_delay + (bezier_t * delay_range)
+    
+    return final_delay_seconds
 
-def log_retry(label, delay, attempt):
-    print(f"{label} Reconnecting in {delay}s (attempt {attempt})...")
-
-def log_fatal_error(label, exc):
-    print(f"{label} FATAL: {exc}")
-
-def log_net_error(label, exc):
-    print(f"{label} Network error: {exc}")
-
-def log_shutdown():
-    print("[SHUTDOWN] Graceful shutdown.")
-
-# ---------------------------------------------------------------------------
-# CONFIGURATION - RUNTIME (In-Memory)
-# ---------------------------------------------------------------------------
-
-# Global state for modal panel
-class ConfigState:
-    def __init__(self):
-        self.worker_tokens = []      # List of token strings
-        self.channel_ids = []        # List of channel IDs (ints)
-        self.is_configured = False   # Both tokens and channels set
-
-config_state = ConfigState()
-
-RETRY_DELAY_INITIAL = 5
-RETRY_DELAY_FACTOR = 1.5
-RETRY_DELAY_MAX = 120
-
-# Parse environment
-main_token = brutality_ghosty.environ.get("DISCORD_BOT_TOKEN", "").strip()
-
-if not main_token:
-    log_error("DISCORD_BOT_TOKEN is required! Set it and restart.")
-    sys.exit(1)
-
-web_dashboard_enabled = brutality_ghosty.environ.get("WEB_DASHBOARD", "true").strip().lower() not in ("0", "false", "no", "off")
-
-clear_screen()
-
-print(f"""
-╔════════════════════════════════════════════════════════════════╗
-║          GhoSty OwO V4 — Modal Panel Edition                   ║
-║                                                                 ║
-║  Configuration: Via .panel command in Discord                  ║
-║  Workers: Waiting for token & channel setup                    ║
-║  Status: 🟡 READY (awaiting configuration)                     ║
-╚════════════════════════════════════════════════════════════════╝
-""")
-
-# Materialize embedded files
-_materialize_embedded_files()
-
-# Import core modules
-from core.utils import create_bot
-from core.heart import WorkerState, WorkerManager, register_commands, _run_farming_loop, PseudoCtx
-
-manager = WorkerManager()
-manager.set_has_channels_config(False)  # Will be set to True when configured
-
-
-# ---------------------------------------------------------------------------
-# UTILITY FUNCTIONS
-# ---------------------------------------------------------------------------
-
-def _parse_channel_id(line):
-    """Parse a channel ID from various formats."""
-    line = line.strip()
-    if not line or line.startswith("#"):
-        return None
-    if line.isdigit():
-        return int(line)
-    match = re.search(r'/channels/\d+/(\d+)', line)
-    if match:
-        return int(match.group(1))
-    return None
-
-def _validate_tokens(token_string):
-    """Parse and validate comma-separated tokens. Returns list or None."""
-    tokens = [t.strip() for t in token_string.split(",")]
-    tokens = [t for t in tokens if t]
-    if not tokens:
-        return None
-    return tokens
-
-def _validate_channels(channel_string):
-    """Parse and validate comma-separated channel IDs. Returns list or None."""
-    parts = [p.strip() for p in channel_string.split(",")]
-    channels = []
-    for part in parts:
-        ch_id = _parse_channel_id(part)
-        if ch_id is not None:
-            channels.append(ch_id)
-    if not channels:
-        return None
-    return channels
-
-
-# ---------------------------------------------------------------------------
-# WORKER THREAD (Unchanged from original)
-# ---------------------------------------------------------------------------
-
-def run_worker(worker_number, token, channel_id):
-    """Run a single selfbot worker with prefix commands."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    label = f"[W#{worker_number:02d}]"
-    retry_delay = RETRY_DELAY_INITIAL
-    attempt = 0
-
-    while True:
-        attempt += 1
-        if attempt > 1:
-            log_retry(label, retry_delay, attempt)
-            _time.sleep(retry_delay)
-            retry_delay = min(retry_delay * RETRY_DELAY_FACTOR, RETRY_DELAY_MAX)
-
-        try:
-            bot = create_bot(worker_number)
+async def _monitor_boss_fights(ctx, ws, bot):
+    await made_by_ghosty.sleep(5)
+    log_worker_event(ws.worker_number, "⚔️ Boss module initialized.", "INFO")
+    
+    first_run = True
+    
+    while ws.running:
+        if getattr(ws, "boss_tickets", 0) <= 0:
+            log_worker_event(ws.worker_number, "🚫 Out of boss tickets. Boss module sleeping until restart.", "WARNING")
+            break
             
-            if attempt == 1:
-                ws = WorkerState(worker_number)
-                ws.bot = bot
-                ws.auto_start_channel_id = channel_id
-                ws.current_speed_mode = "efficient"  # Force efficient mode
-                ws.huntbot_enabled = True             # Force huntbot on
-                manager.register_worker(ws)
-                register_commands(bot, ws)
-            else:
-                ws = manager.get_worker(worker_number)
-                ws.bot = bot
-                register_commands(bot, ws)
+        if first_run:
 
-            @bot.event
-            async def on_ready():
-                ws.username = str(bot.user)
-                log_worker_ready(worker_number, str(bot.user), ws.auto_start_channel_id)
-                
-                # Auto-start farming on ready
-                if ws.auto_start_channel_id:
-                    ch_id = ws.auto_start_channel_id
-                    success, blocking = manager.try_claim_channel(ch_id, worker_number)
-                    
-                    if success:
-                        target_channel = bot.get_channel(ch_id)
-                        if target_channel:
-                            pseudo_ctx = PseudoCtx(target_channel, bot)
-                            asyncio.create_task(_run_farming_loop(pseudo_ctx, ws, bot))
-                            log_info(f"[W#{worker_number:02d}] Auto-started farming in channel {ch_id}")
-                    else:
-                        log_warn(f"[W#{worker_number:02d}] Channel {ch_id} locked by another worker")
-
-            @bot.event
-            async def on_disconnect():
-                log_disconnect(label)
-
-            @bot.event
-            async def on_resumed():
-                log_resumed(label)
-
-            @bot.event
-            async def on_error(event, *args, **kwargs):
-                import traceback
-                log_event_error(label, event)
-                traceback.print_exc()
-
-            log_worker_start(worker_number)
-            bot.run(token, log_handler=None)
-            break
-
-        except (KeyboardInterrupt, SystemExit):
-            break
-        except Exception as e:
-            log_net_error(label, e)
-
-    loop.close()
-
-
-# ---------------------------------------------------------------------------
-# MAIN CONTROLLER BOT (With Modal Panels)
-# ---------------------------------------------------------------------------
-
-import discord
-from discord.ext import commands
-
-class PanelView(discord.ui.View):
-    """View with two buttons for modal interactions."""
-    
-    def __init__(self, bot_instance):
-        super().__init__(persistent=False)
-        self.bot = bot_instance
-    
-    @discord.ui.button(label="Add Tokens", style=discord.ButtonStyle.blurple, custom_id="btn_add_tokens")
-    async def btn_add_tokens(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Open modal for token input."""
-        modal = TokenModal()
-        await interaction.response.send_modal(modal)
-    
-    @discord.ui.button(label="Add Channels", style=discord.ButtonStyle.blurple, custom_id="btn_add_channels")
-    async def btn_add_channels(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Open modal for channel input."""
-        modal = ChannelModal()
-        await interaction.response.send_modal(modal)
-
-
-class TokenModal(discord.ui.Modal, title="Add Worker Tokens"):
-    """Modal for entering worker account tokens."""
-    
-    tokens_input = discord.ui.TextInput(
-        label="Worker Tokens",
-        placeholder="Single token or comma-separated: TOKEN1,TOKEN2,TOKEN3",
-        style=discord.TextStyle.long,
-        min_length=50,
-        max_length=3000,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        """Process token submission."""
-        token_string = str(self.tokens_input).strip()
-        tokens = _validate_tokens(token_string)
-        
-        if not tokens:
-            await interaction.response.send_message(
-                "❌ Invalid tokens. Please enter valid Discord user tokens.",
-                ephemeral=True
-            )
-            return
-        
-        config_state.worker_tokens = tokens
-        
-        await interaction.response.send_message(
-            f"✅ Loaded {len(tokens)} worker token(s).\n\n"
-            f"Now add {len(tokens)} channel ID(s) with the **Add Channels** button.",
-            ephemeral=True
-        )
-        
-        # Check if both are configured
-        if config_state.worker_tokens and config_state.channel_ids:
-            if len(config_state.worker_tokens) == len(config_state.channel_ids):
-                await _start_workers()
-
-
-class ChannelModal(discord.ui.Modal, title="Add Channel IDs"):
-    """Modal for entering channel IDs for workers."""
-    
-    channels_input = discord.ui.TextInput(
-        label="Channel IDs",
-        placeholder="Single ID or comma-separated: 1234567890,1234567891,1234567892",
-        style=discord.TextStyle.long,
-        min_length=10,
-        max_length=2000,
-        required=True
-    )
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        """Process channel submission."""
-        channel_string = str(self.channels_input).strip()
-        channels = _validate_channels(channel_string)
-        
-        if not channels:
-            await interaction.response.send_message(
-                "❌ Invalid channel IDs. Please enter valid Discord channel IDs.",
-                ephemeral=True
-            )
-            return
-        
-        config_state.channel_ids = channels
-        
-        await interaction.response.send_message(
-            f"✅ Loaded {len(channels)} channel ID(s).\n\n"
-            f"Now add {len(channels)} worker token(s) with the **Add Tokens** button.",
-            ephemeral=True
-        )
-        
-        # Check if both are configured
-        if config_state.worker_tokens and config_state.channel_ids:
-            if len(config_state.worker_tokens) == len(config_state.channel_ids):
-                await _start_workers()
-
-
-async def _start_workers():
-    """Start all workers with configured tokens and channels."""
-    if config_state.is_configured:
-        return  # Already started
-    
-    if not config_state.worker_tokens or not config_state.channel_ids:
-        return
-    
-    if len(config_state.worker_tokens) != len(config_state.channel_ids):
-        log_warn(f"Token count ({len(config_state.worker_tokens)}) != Channel count ({len(config_state.channel_ids)})")
-        return
-    
-    config_state.is_configured = True
-    manager.set_has_channels_config(True)
-    
-    log_success(f"Configuration complete: {len(config_state.worker_tokens)} workers")
-    
-    # Start worker threads
-    for worker_num, (token, channel_id) in enumerate(zip(config_state.worker_tokens, config_state.channel_ids), start=1):
-        t = threading.Thread(
-            target=run_worker,
-            args=(worker_num, token, channel_id),
-            daemon=True,
-            name=f"Worker-{worker_num}"
-        )
-        t.start()
-        log_info(f"Started worker thread #{worker_num} for channel {channel_id}")
-
-
-class ControllerBot(commands.Cog):
-    """Main controller with .panel command."""
-    
-    def __init__(self, bot):
-        self.bot = bot
-    
-    @commands.command(name="panel")
-    async def cmd_panel(self, ctx):
-        """Display configuration panel with modals."""
-        
-        # Build current config status
-        token_count = len(config_state.worker_tokens)
-        channel_count = len(config_state.channel_ids)
-        
-        if config_state.is_configured:
-            status = f"✅ **ACTIVE** — {token_count} worker(s) farming"
-        elif token_count > 0 or channel_count > 0:
-            status = f"⚠️ **PARTIAL** — {token_count} token(s), {channel_count} channel(s)"
+            delay = ghostyjija.uniform(120.0, 300.0)
+            first_run = False
         else:
-            status = "🟡 **NOT CONFIGURED** — No tokens or channels set"
+            delay = calculate_boss_delay()
+            
+        ws.next_boss_fight_time = datetime.now() + timedelta(seconds=delay)
+        log_worker_event(ws.worker_number, f"⏳ Next boss check scheduled in {int(delay//60)}m {int(delay%60)}s (at {ws.next_boss_fight_time.strftime('%H:%M:%S')}).", "DEBUG")
         
-        embed = discord.Embed(
-            title="🎮 GhoSty OwO — Configuration Panel",
-            description=(
-                "**⚠️ SECURITY WARNING** ⚠️\n"
-                "Do not share your worker tokens with anyone!\n"
-                "These grant full access to your Discord accounts.\n\n"
-                "Token values will be submitted to this bot only.\n"
-                "Only the bot operator can see configuration."
-            ),
-            color=discord.Color.blurple()
-        )
-        
-        embed.add_field(
-            name="Current Status",
-            value=status,
-            inline=False
-        )
-        
-        embed.add_field(
-            name="How to Configure",
-            value=(
-                "1. Click **Add Tokens** → Enter your worker account tokens\n"
-                "   (Single token or comma-separated: `TOKEN1,TOKEN2,TOKEN3`)\n\n"
-                "2. Click **Add Channels** → Enter channel IDs for each worker\n"
-                "   (Must match token count: `CHANNEL1,CHANNEL2,CHANNEL3`)\n\n"
-                "3. Farming starts automatically once configured\n"
-                "   All workers set to **efficient** mode with **HuntBot ON**"
-            ),
-            inline=False
-        )
-        
-        embed.add_field(
-            name="⚙️ Default Settings",
-            value="Speed Mode: **Efficient** 🐢\nHuntBot: **Enabled** 🎯",
-            inline=False
-        )
-        
-        embed.set_footer(text="Do not share this message or your tokens | GhoSty OwO V4")
-        
-        # Create view with buttons
-        view = PanelView(self.bot)
-        
-        await ctx.send(embed=embed, view=view)
+        slept = 0
+        while slept < delay:
+            if not ws.running:
+                return
+            await made_by_ghosty.sleep(5)
+            slept += 5
+            
+        if not ws.running or getattr(ws, "boss_tickets", 0) <= 0:
+            break
+            
+        await execute_boss_fight(ctx, ws, bot)
 
-
-async def setup_controller_bot():
-    """Initialize the main controller bot."""
-    intents = discord.Intents.default()
-    intents.message_content = True
-    intents.guilds = True
+async def execute_boss_fight(ctx, ws, bot):
+    guild_id = 420104212895105044
+    primary_channel_id = 1412234015578132511
+    backup_channels = [1412269279398596728, 1412269382599704691]
+    owo_bot_id = 408785106942164992
     
-    bot = commands.Bot(command_prefix=".", intents=intents, help_command=None)
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        log_worker_event(ws.worker_number, f"⚠️ Not in target server ({guild_id}). Skipping boss fight.", "DEBUG")
+        return
+        
+    channel = bot.get_channel(primary_channel_id)
+    if not channel:
+        for backup in backup_channels:
+            channel = bot.get_channel(backup)
+            if channel:
+                break
+                
+    if not channel:
+        log_worker_event(ws.worker_number, "⚠️ Cannot access any boss channels. Skipping boss fight.", "DEBUG")
+        return
+
+    log_worker_event(ws.worker_number, "⚔️ Attempting to find a Guild Boss...", "INFO")
+
+    ws.is_boss_fighting = True
     
-    @bot.event
-    async def on_ready():
-        log_controller_ready(str(bot.user))
-    
-    await bot.add_cog(ControllerBot(bot))
-    return bot
+    try:
+        import discord
+        from discord.interactions import _wrapped_interaction
+        from discord.utils import _generate_nonce
+        from discord.enums import InteractionType
 
+        def find_fight_button(data, targets):
+            if isinstance(data, dict):
+                lbl = str(data.get('label', '')).lower().strip()
+                cid = str(data.get('custom_id', '')).lower().strip()
+                if data.get('type') == 2 and ('fight' in lbl or 'fight' in cid):
+                    if not data.get('disabled', False):
+                        targets.append(data)
+                    else:
+                        log_worker_event(ws.worker_number, "🔍 Found 'Fight' button in raw JSON, but it is disabled.", "DEBUG")
+                for v in data.values():
+                    find_fight_button(v, targets)
+            elif isinstance(data, list):
+                for item in data:
+                    find_fight_button(item, targets)
 
-def run_main_controller(token):
-    """Run the main controller bot."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    label = "[MAIN-CTRL]"
-    retry_delay = RETRY_DELAY_INITIAL
-    attempt = 0
-
-    while True:
-        attempt += 1
-        if attempt > 1:
-            log_retry(label, retry_delay, attempt)
-            _time.sleep(retry_delay)
-            retry_delay = min(retry_delay * RETRY_DELAY_FACTOR, RETRY_DELAY_MAX)
+        target_message = None
+        target_button = None
+        
+        async for msg in channel.history(limit=40):
+            if msg.author.id == owo_bot_id:
+                try:
+                    route = discord.http.Route("GET", "/channels/{channel_id}/messages?limit=1&around={message_id}", channel_id=channel.id, message_id=msg.id)
+                    raw_data = await bot.http.request(route)
+                    if isinstance(raw_data, list) and len(raw_data) > 0:
+                        raw_data = raw_data[0]
+                    
+                    if 'components' in raw_data:
+                        raw_str = str(raw_data).lower()
+                        if "boss" in raw_str or "fight" in raw_str:
+                            targets = []
+                            find_fight_button(raw_data.get('components', []), targets)
+                            if targets:
+                                target_message = msg
+                                target_button = targets[0]
+                                break
+                except Exception as e:
+                    pass
+                
+        if not target_button:
+            log_worker_event(ws.worker_number, "❌ No active Guild Boss fights found.", "INFO")
+            ws.is_boss_fighting = False
+            return
+            
+        log_worker_event(ws.worker_number, "💥 Found Boss! Clicking Fight...", "SUCCESS")
+        await _wrapped_interaction(
+            target_message._state,
+            _generate_nonce(),
+            InteractionType.component,
+            None,
+            channel,
+            target_button,
+            message=target_message
+        )
+        
+        def check(i):
+            if i.user.id == bot.user.id and i.channel.id == channel.id:
+                return True
+            return False
 
         try:
-            bot = loop.run_until_complete(setup_controller_bot())
+            def check_msg(m):
+                if m.channel.id == channel.id and getattr(m, 'flags', None) and m.flags.ephemeral:
+                    return True
+                return False
+                
+            resp = await bot.wait_for('message', check=check_msg, timeout=5.0)
+            content = str(resp.content).lower()
+            if not content and resp.embeds:
+                for embed in resp.embeds:
+                    if embed.description:
+                        content += embed.description.lower()
+                    if embed.title:
+                        content += embed.title.lower()
 
-            @bot.event
-            async def on_disconnect():
-                log_disconnect(label)
+            if "you don't have any boss tickets" in content:
+                log_worker_event(ws.worker_number, "🚫 Out of boss tickets (Discord response).", "WARNING")
+                ws.boss_tickets = 0
+            elif "you already fought this boss" in content:
+                log_worker_event(ws.worker_number, "⚠️ Already fought this boss. Skipping.", "DEBUG")
+            else:
+                log_worker_event(ws.worker_number, "✅ Boss fight interaction complete.", "SUCCESS")
+                
+        except made_by_ghosty.TimeoutError:
+            log_worker_event(ws.worker_number, "✅ Boss fight clicked (no error messages received).", "SUCCESS")
+            
+    except Exception as e:
+        log_worker_event(ws.worker_number, f"⚠️ Error executing boss fight: {e}", "WARNING")
+    finally:
+        ws.is_boss_fighting = False
+''',
+    'core/ghostycorehb.py': r'''"""
+This code is only made for educational and practice purposes. 
+Author and Async Development are not responsible for misuse.
 
-            @bot.event
-            async def on_resumed():
-                log_resumed(label)
+GhoSty OwO V4 Alpha Build
+Stable Alpha Build Version: 280826.4.1.0
 
-            @bot.event
-            async def on_error(event, *args, **kwargs):
-                import traceback
-                log_event_error(label, event)
-                traceback.print_exc()
+GitHub: https://github.com/WannaBeGhoSt
+Discord: https://discord.gg/asMJGgDA7u
+"""
 
-            log_info(f"{label} Starting with token: {token[:20]}...")
-            bot.run(token, log_handler=None)
-            break
+# DO NOT CHANGE THIS FILE UNLESS YOU KNOW WHAT YOU'RE DOING 
 
-        except Exception as e:
-            log_net_error(label, e)
+import os
+import requests
+from PIL import Image
+import numpy as np
+from io import BytesIO
 
-    loop.close()
+def GhoStyGetImgPaths(directory):
+    results = []
+    
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.png'):
+                results.append(os.path.join(root, file))
+    
+    return results
 
+def CompareAllImgsGhoStys(large_data, large_w, small_data, small_w, small_h, start_x, start_y):
+    for y in range(small_h):
+        for x in range(small_w):
+            large_idx = ((start_y + y) * large_w + (start_x + x)) * 4
+            small_idx = (y * small_w + x) * 4
+            if (small_data[small_idx + 3] > 0 and 
+                (small_data[small_idx] != large_data[large_idx] or
+                 small_data[small_idx + 1] != large_data[large_idx + 1] or
+                 small_data[small_idx + 2] != large_data[large_idx + 2])):
+                return False
+    
+    return True
 
-# ---------------------------------------------------------------------------
-# MAIN ENTRY POINT
-# ---------------------------------------------------------------------------
+def MatchGhoStyCapLetters(large_data, large_w, large_h, checks):
+    matches = []
+    for check in checks:
+        img_data = check['img_data']
+        small_w = check['width']
+        small_h = check['height']
+        letter = check['letter']
+        
+        for y in range(large_h - small_h + 1):
+            for x in range(large_w - small_w + 1):
+                if CompareAllImgsGhoStys(large_data, large_w, img_data, small_w, small_h, x, y):
+                    overlaps = any(
+                        abs(match['x'] - x) < small_w and abs(match['y'] - y) < small_h
+                        for match in matches
+                    )
+                    
+                    if not overlaps:
+                        matches.append({'x': x, 'y': y, 'letter': letter})
+    matches.sort(key=lambda m: m['x'])
+    return ''.join(match['letter'] for match in matches)
+
+async def GhoStySolveNormalCap(captcha_url):
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    letters_dir = os.path.join(current_dir, "letters")
+    checks = []
+    check_images = sorted(GhoStyGetImgPaths(letters_dir))
+    
+    for check_image_path in check_images:
+        with Image.open(check_image_path) as img:
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            width, height = img.size
+            img_array = np.array(img)
+            img_data = img_array.flatten().astype(np.uint8)
+            letter = os.path.splitext(os.path.basename(check_image_path))[0]
+            
+            checks.append({
+                'img_data': img_data,
+                'width': width,
+                'height': height,
+                'letter': letter
+            })
+    response = requests.get(captcha_url)
+    response.raise_for_status()
+    with Image.open(BytesIO(response.content)) as large_img:
+        if large_img.mode != 'RGBA':
+            large_img = large_img.convert('RGBA')
+        
+        width, height = large_img.size
+        large_array = np.array(large_img)
+        large_data = large_array.flatten().astype(np.uint8)
+    return MatchGhoStyCapLetters(large_data, width, height, checks)
+
+def GhoStySyncedCaptchaSolve(captcha_url):
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    letters_dir = os.path.join(current_dir, "letters")
+    checks = []
+    check_images = sorted(GhoStyGetImgPaths(letters_dir))
+    for check_image_path in check_images:
+        with Image.open(check_image_path) as img:
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            
+            width, height = img.size
+            img_array = np.array(img)
+            img_data = img_array.flatten().astype(np.uint8)
+            letter = os.path.splitext(os.path.basename(check_image_path))[0]
+            
+            checks.append({
+                'img_data': img_data,
+                'width': width,
+                'height': height,
+                'letter': letter
+            })
+    
+
+    response = requests.get(captcha_url)
+    response.raise_for_status()
+    
+
+    with Image.open(BytesIO(response.content)) as large_img:
+
+        if large_img.mode != 'RGBA':
+            large_img = large_img.convert('RGBA')
+        
+        width, height = large_img.size
+
+        large_array = np.array(large_img)
+        large_data = large_array.flatten().astype(np.uint8)
+    return MatchGhoStyCapLetters(large_data, width, height, checks)
 
 if __name__ == "__main__":
-    threads = []
+    pass''',
+    'core/heart.py': r'''"""
+This code is only made for educational and practice purposes. 
+Author and Async Development are not responsible for misuse.
 
-    # Start web dashboard if enabled
-    if web_dashboard_enabled:
-        try:
-            from dashboard.app import start_server
-            dash_t = threading.Thread(target=start_server, daemon=True, name="Dashboard")
-            dash_t.start()
-            threads.append(dash_t)
-            log_success("Web dashboard started")
-        except Exception as e:
-            log_warn(f"Could not start dashboard: {e}")
+GhoSty OwO V4 Alpha Build
+Stable Alpha Build Version: 280826.4.1.0
 
-    # Start main controller thread
-    if main_token:
-        t = threading.Thread(
-            target=run_main_controller,
-            args=(main_token,),
-            daemon=True,
-            name="MainController"
-        )
-        t.start()
-        threads.append(t)
-        log_success("Main controller thread started")
+GitHub: https://github.com/WannaBeGhoSt
+Discord: https://discord.gg/asMJGgDA7u
+"""
 
-    # Wait for threads
-    try:
-        for t in threads:
-            t.join()
-    except KeyboardInterrupt:
-        log_shutdown()
-        sys.exit(0)
+import random as ghostyjija
+import time
+import re
+import os
+import unicodedata
+import threading
+import json as ghostop
+import asyncio as made_by_ghosty
+from datetime import datetime, timedelta
+from .modules import parse_zoo_message, fetch_zoo_data, format_value, parse_gems, SPEED_MODES
+from .ghostycorehb import GhoStySolveNormalCap, GhoStySyncedCaptchaSolve
+from .ui import log_worker_event, log_critical, log_support_prompt
+from .bossmodule import _monitor_boss_fights
+
+class WorkerState:
+    def __init__(self, worker_number):
+        self.worker_number = worker_number
+        self.bot = None
+        self.username = "Unknown"
+        self.running = False
+        self.has_started = False
+        self.sleep_mode = False
+        self.farming_start_time = None
+        self.sleep_start_time = None
+        self.ghosty_start_time = datetime.now()
+        self.ghosty_commands_sent = 0
+        self.ghosty_gems_used = 0
+        self.last_gem_check = 0
+        self.current_speed_mode = "lifetime"
+        self.last_mode_change_time = datetime.now()
+        self.lifetime_work_cycles = 0
+        self.lifetime_day_skip_active = False
+        self.lifetime_cycle_start_time = None
+        self.initial_cash = 0
+        self.initial_essence = 0
+        self.current_cash = 0
+        self.current_essence = 0
+        self.zoo_channel = None
+        self.GhoStyHbAlrActiveVar = False
+        self.GhoStyCoreAvailCheck = True
+        self.huntbot_enabled = True        
+        self.active_channel_id = None
+        self.auto_start_channel_id = None    
+        self.paused = False                  
+        self.pause_end_time = None          
+        self.boss_tickets = 3
+        self.is_boss_fighting = False
+        self.next_boss_fight_time = None
+        self.is_mail_claiming = False
+        self.last_mail_claim = None
+        
+    def to_dict(self):
+        def serialize_dt(dt):
+            return dt.isoformat() if dt else None
+            
+        return {
+            "worker_number": self.worker_number,
+            "username": self.username,
+            "running": self.running,
+            "has_started": self.has_started,
+            "sleep_mode": self.sleep_mode,
+            "paused": self.paused,
+            "current_speed_mode": self.current_speed_mode,
+            "initial_cash": self.initial_cash,
+            "initial_essence": self.initial_essence,
+            "ghosty_commands_sent": self.ghosty_commands_sent,
+            "ghosty_gems_used": self.ghosty_gems_used,
+            "farming_start_time": serialize_dt(self.farming_start_time),
+            "pause_end_time": serialize_dt(self.pause_end_time),
+            "sleep_start_time": serialize_dt(self.sleep_start_time),
+            "ghosty_start_time": serialize_dt(self.ghosty_start_time),
+            "lifetime_work_cycles": self.lifetime_work_cycles,
+            "lifetime_day_skip_active": self.lifetime_day_skip_active,
+            "lifetime_cycle_start_time": serialize_dt(self.lifetime_cycle_start_time),
+            "huntbot_enabled": self.huntbot_enabled,
+            "huntbot_solver_available": self.GhoStyCoreAvailCheck,
+            "last_gem_check": self.last_gem_check,
+            "boss_tickets": self.boss_tickets,
+            "is_boss_fighting": self.is_boss_fighting,
+            "next_boss_fight_time": serialize_dt(self.next_boss_fight_time),
+            "is_mail_claiming": self.is_mail_claiming,
+            "last_mail_claim": serialize_dt(self.last_mail_claim)
+        }
+
+class WorkerManager:
+    _instance = None
+    _lock = threading.Lock()
+
+    HB_DATA_FILE = "ghostyhbworkers.json"
+
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._workers = {}
+                cls._instance._channel_locks = {}
+                cls._instance._main_token = None
+                cls._instance._total_workers = 0
+                cls._instance._hb_lock = threading.Lock()
+                cls._instance._has_channels_config = False  # NEW
+            return cls._instance
+
+    def register_worker(self, state):
+        with self._lock:
+            self._workers[state.worker_number] = state
+            self._total_workers = len(self._workers)
+
+    def get_worker(self, worker_number):
+        with self._lock:
+            return self._workers.get(worker_number)
+
+    def get_all_workers(self):
+        with self._lock:
+            return dict(self._workers)
+
+    def set_main_token(self, token):
+        self._main_token = token
+
+    def set_has_channels_config(self, value: bool):
+        self._has_channels_config = value
+
+    @property
+    def has_channels_config(self):
+        return self._has_channels_config
+
+    @property
+    def main_token(self):
+        return self._main_token
+
+    @property
+    def total_workers(self):
+        return self._total_workers
+
+    def try_claim_channel(self, channel_id, worker_number):
+        with self._lock:
+            existing = self._channel_locks.get(channel_id)
+            if existing is not None and existing != worker_number:
+                return False, existing
+            self._channel_locks[channel_id] = worker_number
+            return True, None
+
+    def release_channel(self, channel_id, worker_number):
+        with self._lock:
+            if self._channel_locks.get(channel_id) == worker_number:
+                del self._channel_locks[channel_id]
+
+    def get_channel_worker(self, channel_id):
+        with self._lock:
+            return self._c
