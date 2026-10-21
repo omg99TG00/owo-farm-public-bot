@@ -1,0 +1,10 @@
+discord.py>=2.0
+discord.py-self
+colorama
+aiohttp
+requests
+pillow
+numpy
+flask
+flask-cors
+waitress
