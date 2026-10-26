@@ -7,3 +7,4 @@ numpy
 flask
 flask-cors
 waitress
+audioop-lts
