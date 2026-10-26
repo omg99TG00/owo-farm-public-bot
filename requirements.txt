@@ -1,3 +1,4 @@
+discord.py>=2.0
 discord.py-self
 colorama
 aiohttp
@@ -7,4 +8,3 @@ numpy
 flask
 flask-cors
 waitress
-audioop-lts
